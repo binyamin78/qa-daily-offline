@@ -1,13 +1,10 @@
-const CACHE_NAME = 'qa-offline-v3';
+const CACHE_NAME = 'qa-offline-v4';
+// Hashed JS/CSS bundles are cached on first load by the fetch handler below
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/fonts/assistant-hebrew.woff2',
-  '/fonts/assistant-latin.woff2',
-  '/fonts/assistant-latinext.woff2'
+  './',
+  './index.html',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -53,7 +50,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch(() => {
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html') || caches.match('/');
+          return caches.match('./index.html');
         }
       });
     })

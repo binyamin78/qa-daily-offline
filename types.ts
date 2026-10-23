@@ -11,7 +11,13 @@ export interface FormData {
 }
 
 export interface AppSettings {
-  defaultProjectName: string;
   defaultVersion: string;
   customProjects: string[];
+}
+
+export interface HistoryEntry {
+  id: string;
+  createdAt: string;
+  projectName: string;
+  text: string;
 }

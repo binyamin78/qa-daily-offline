@@ -45,3 +45,17 @@ input:focus, textarea:focus, select:focus {
     font-size: 16px !important;
   }
 }
+
+/* Android edge-to-edge: keep content clear of the status / navigation bars.
+   Capacitor exposes --safe-area-inset-* where the WebView lacks env() support. */
+.safe-top {
+  padding-top: calc(1.5rem + max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)));
+}
+
+.safe-bottom-pad {
+  padding-bottom: calc(6rem + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)));
+}
+
+.safe-bottom-toast {
+  bottom: calc(1.5rem + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)));
+}
