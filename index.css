@@ -59,3 +59,27 @@ input:focus, textarea:focus, select:focus {
 .safe-bottom-toast {
   bottom: calc(1.5rem + max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px)));
 }
+
+/* Dark mode: <html class="dark"> is toggled from settings (or follows the system).
+   These rules sit outside Tailwind's layers, so they override its light utilities. */
+html.dark { color-scheme: dark; }
+html.dark body { background-color: #030712; color: #e5e7eb; }
+html.dark .bg-white { background-color: #111827; }
+html.dark .bg-gray-50 { background-color: #0b1220; }
+html.dark .bg-gray-100 { background-color: #1f2937; }
+html.dark .bg-gray-200 { background-color: #374151; }
+html.dark .bg-gray-800 { background-color: #374151; }
+html.dark .text-gray-900, html.dark .text-gray-800 { color: #f3f4f6; }
+html.dark .text-gray-600 { color: #d1d5db; }
+html.dark .text-gray-500 { color: #9ca3af; }
+html.dark .text-gray-400 { color: #6b7280; }
+html.dark .border-gray-200, html.dark .border-gray-300, html.dark .border-x { border-color: #1f2937; }
+html.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.15); }
+html.dark .border-red-100 { border-color: rgba(220, 38, 38, 0.35); }
+html.dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.15); }
+html.dark .border-green-100, html.dark .border-green-200 { border-color: rgba(22, 163, 74, 0.4); }
+html.dark .text-green-700, html.dark .text-green-800, html.dark .text-green-900 { color: #86efac; }
+html.dark .bg-yellow-400 { color: #422006; }
+html.dark .bg-green-600 { background-color: #15803d; }
+html.dark .hover\:bg-green-100:hover { background-color: rgba(22, 163, 74, 0.3); }
+html.dark input::placeholder, html.dark textarea::placeholder { color: #6b7280; }

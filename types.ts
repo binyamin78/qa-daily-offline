@@ -1,7 +1,10 @@
 
+export type ReportStatus = 'ok' | 'risk' | 'blocked';
+
 export interface FormData {
   projectName: string;
   version: string;
+  status: ReportStatus;
   checkedAreas: string;
   newJiraBugs: string;
   blockers: string;
@@ -10,9 +13,35 @@ export interface FormData {
   progressPercentage: string;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+export type ReportLanguage = 'he' | 'en';
+
+export interface ReminderSettings {
+  enabled: boolean;
+  time: string; // HH:MM
+  days: number[]; // 0 = Sunday
+}
+
 export interface AppSettings {
   defaultVersion: string;
   customProjects: string[];
+  templates: string[];
+  theme: ThemeMode;
+  reportLanguage: ReportLanguage;
+  reminder: ReminderSettings;
+}
+
+// Structured per-project data kept with each sent report, for charts and summaries
+export interface ReportItem {
+  projectName: string;
+  version: string;
+  status: ReportStatus;
+  progress: number;
+  bugs: number;
+  blockers: string;
+  openIssues: string;
+  deadline: string;
 }
 
 export interface HistoryEntry {
@@ -20,4 +49,5 @@ export interface HistoryEntry {
   createdAt: string;
   projectName: string;
   text: string;
+  items?: ReportItem[]; // missing on reports saved before v1.2
 }

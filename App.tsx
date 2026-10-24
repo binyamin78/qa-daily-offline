@@ -1,17 +1,26 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import Header from './components/Header';
 import { FormInput, NumberStepper } from './components/FormFields';
 import ProgressPicker from './components/ProgressPicker';
 import SettingsModal from './components/SettingsModal';
 import HistoryPanel from './components/HistoryPanel';
-import { FormData, AppSettings, HistoryEntry } from './types';
-import { generateOfflineReport, formatVersion, toNumberField, daysUntil, isSameDay } from './services/offlineReportService';
-import { loadSettings, saveSettings, loadDraft, saveDraft, emptyForm, loadHistory, saveHistory, HISTORY_LIMIT } from './services/storage';
+import InsightsPanel from './components/InsightsPanel';
+import { FormData, AppSettings, HistoryEntry, ReportStatus } from './types';
+import {
+  generateOfflineReport, formatVersion, toNumberField, daysUntil, isSameDay, formatDate,
+  toReportItem, hasBlockers, STATUS_EMOJI, ForecastNotes,
+} from './services/offlineReportService';
+import {
+  loadSettings, saveSettings, loadDraft, saveDraft, emptyForm, loadHistory, saveHistory,
+  loadCombined, saveCombined, HISTORY_LIMIT,
+} from './services/storage';
+import { forecastCompletion, projectSeries } from './services/insights';
 import { copyText, shareText, openWhatsApp, isNative } from './services/shareService';
+import { syncReminders, ReminderResult } from './services/reminderService';
 
-type View = 'form' | 'review' | 'history';
+type View = 'form' | 'review' | 'history' | 'insights';
 type Modal = 'settings' | 'progress' | null;
 type Toast = { text: string; tone: 'info' | 'error' } | null;
 
@@ -19,9 +28,18 @@ const REQUIRED_FIELDS: (keyof FormData)[] = ['projectName', 'progressPercentage'
 const NUMBER_LIMITS: Partial<Record<keyof FormData, number>> = { newJiraBugs: 999, progressPercentage: 100 };
 const REPORT_TITLE = 'דיווח QA יומי';
 
+const STATUS_OPTIONS: { value: ReportStatus; label: string; active: string }[] = [
+  { value: 'ok', label: 'תקין', active: 'bg-green-600 border-green-600 text-white' },
+  { value: 'risk', label: 'בסיכון', active: 'bg-yellow-400 border-yellow-400 text-yellow-950' },
+  { value: 'blocked', label: 'חסום', active: 'bg-red-600 border-red-600 text-white' },
+];
+
+const isComplete = (f: FormData) => REQUIRED_FIELDS.every(key => String(f[key]).trim() !== '');
+
 const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [formData, setFormData] = useState<FormData>(() => loadDraft(loadSettings()));
+  const [combined, setCombined] = useState<FormData[]>(() => loadCombined(loadSettings()));
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
 
   const [view, setView] = useState<View>('form');
@@ -31,14 +49,18 @@ const App: React.FC = () => {
   const [validationErrors, setValidationErrors] = useState<(keyof FormData)[]>([]);
   const [editableText, setEditableText] = useState('');
   const [reviewSource, setReviewSource] = useState('');
+  const [reviewSections, setReviewSections] = useState<FormData[]>([]);
   const [copySuccess, setCopySuccess] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const [reminderState, setReminderState] = useState<ReminderResult | null>(null);
 
   const allProjects = settings.customProjects;
+  const language = settings.reportLanguage;
 
   useEffect(() => { saveDraft(formData); }, [formData]);
   useEffect(() => { saveSettings(settings); }, [settings]);
   useEffect(() => { saveHistory(history); }, [history]);
+  useEffect(() => { saveCombined(combined); }, [combined]);
 
   useEffect(() => {
     if (!toast) return;
@@ -54,6 +76,35 @@ const App: React.FC = () => {
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, [view]);
 
+  // --- Theme ---
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = settings.theme === 'dark' || (settings.theme === 'system' && media.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', dark ? 'dark' : 'light');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#14532d' : '#16a34a');
+    };
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [settings.theme]);
+
+  // --- Daily reminder (re-planned whenever settings change, a report is sent, or the app resumes) ---
+  const sentToday = history.some(e => isSameDay(new Date(e.createdAt), new Date()));
+  const askReminderPermission = useRef(false);
+  const [resumeTick, setResumeTick] = useState(0);
+  useEffect(() => {
+    const ask = askReminderPermission.current;
+    askReminderPermission.current = false;
+    syncReminders(settings.reminder, sentToday, ask).then(setReminderState);
+  }, [settings.reminder, sentToday, resumeTick]);
+
+  const updateSettings = (next: AppSettings) => {
+    if (next.reminder.enabled && !settings.reminder.enabled) askReminderPermission.current = true;
+    setSettings(next);
+  };
+
   // Android back button / Escape: close the top-most layer instead of leaving the app
   const goBack = useRef<() => boolean>(() => false);
   goBack.current = () => {
@@ -67,12 +118,16 @@ const App: React.FC = () => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') goBack.current(); };
     window.addEventListener('keydown', onKey);
     if (!isNative()) return () => window.removeEventListener('keydown', onKey);
-    const listener = CapApp.addListener('backButton', () => {
+    const back = CapApp.addListener('backButton', () => {
       if (!goBack.current()) CapApp.minimizeApp();
+    });
+    const resume = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) setResumeTick(t => t + 1);
     });
     return () => {
       window.removeEventListener('keydown', onKey);
-      listener.then(l => l.remove());
+      back.then(l => l.remove());
+      resume.then(l => l.remove());
     };
   }, []);
 
@@ -83,9 +138,25 @@ const App: React.FC = () => {
     setValidationErrors(prev => prev.filter(f => f !== name));
   };
 
+  // Project-specific fields come back from the last report of that project
+  const projectMemory = (name: string): Pick<FormData, 'version' | 'progressPercentage' | 'estimatedCompletion' | 'openIssues'> => {
+    const section = combined.find(s => s.projectName === name);
+    if (section) return section;
+    const item = history.map(e => e.items?.find(i => i.projectName === name)).find(Boolean);
+    if (item) return { version: item.version, progressPercentage: String(item.progress), estimatedCompletion: item.deadline, openIssues: item.openIssues };
+    return { version: settings.defaultVersion, progressPercentage: '0', estimatedCompletion: '', openIssues: '' };
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const name = e.target.name as keyof FormData;
     let value = e.target.value;
+    if (name === 'projectName') {
+      if (value !== formData.projectName) {
+        setFormData(prev => ({ ...prev, projectName: value, ...(value ? projectMemory(value) : {}) }));
+        setValidationErrors(prev => prev.filter(f => f !== 'projectName'));
+      }
+      return;
+    }
     if (name === 'version') value = formatVersion(value);
     const max = NUMBER_LIMITS[name];
     if (max !== undefined) value = toNumberField(value, max);
@@ -99,8 +170,18 @@ const App: React.FC = () => {
     setField(name, next.toString());
   };
 
+  const toggleTemplate = (template: string) => {
+    const lines = formData.checkedAreas.split('\n');
+    const matches = (l: string) => l.replace(/^•\s*/, '').trim() === template;
+    const next = lines.some(matches)
+      ? lines.filter(l => !matches(l)).join('\n')
+      : [...lines.filter(l => l.trim()), `• ${template}`].join('\n');
+    setField('checkedAreas', next);
+  };
+
   const executeClearForm = () => {
     setFormData(emptyForm(settings));
+    setCombined([]);
     setValidationErrors([]);
     setShowClearConfirm(false);
     setReportSent(false);
@@ -109,10 +190,33 @@ const App: React.FC = () => {
 
   const handleProjectRemoved = (name: string) => {
     if (formData.projectName === name) setField('projectName', '');
+    setCombined(prev => prev.filter(s => s.projectName !== name));
   };
 
+  // --- Forecasts ---
+  const currentForecast = useMemo(() => {
+    if (!formData.projectName) return null;
+    const progress = parseInt(toNumberField(formData.progressPercentage, 100) || '0', 10);
+    return forecastCompletion(projectSeries(history, formData.projectName), formData.estimatedCompletion, { date: new Date(), progress });
+  }, [history, formData.projectName, formData.progressPercentage, formData.estimatedCompletion]);
+
+  const lateForecastsFor = (sections: FormData[]): ForecastNotes => {
+    const notes: ForecastNotes = {};
+    for (const s of sections) {
+      const progress = parseInt(toNumberField(s.progressPercentage, 100) || '0', 10);
+      const f = forecastCompletion(projectSeries(history, s.projectName), s.estimatedCompletion, { date: new Date(), progress });
+      if (f.kind === 'projected' && f.late) notes[s.projectName] = f.date;
+    }
+    return notes;
+  };
+
+  // --- Report ---
+  const currentSections = (form: FormData = formData) => [...combined.filter(s => s.projectName !== form.projectName), form];
+
+  const buildReport = (sections: FormData[]) => generateOfflineReport(sections, { language, lateForecasts: lateForecastsFor(sections) });
+
   const prepareForReview = () => {
-    const missing = REQUIRED_FIELDS.filter(key => !formData[key].trim());
+    const missing = REQUIRED_FIELDS.filter(key => !String(formData[key]).trim());
     if (missing.length > 0) {
       setValidationErrors(missing);
       notify("נא למלא את שדות החובה (*)", 'error');
@@ -121,27 +225,56 @@ const App: React.FC = () => {
       first?.focus({ preventScroll: true });
       return;
     }
-    // Keep manual edits to the report text if the form hasn't changed since
-    const source = JSON.stringify(formData);
+    const sections = currentSections();
+    // Keep manual edits to the report text if nothing changed since
+    const source = JSON.stringify({ sections, language });
     if (source !== reviewSource || !editableText) {
-      setEditableText(generateOfflineReport(formData));
+      setEditableText(buildReport(sections));
       setReviewSource(source);
     }
+    setReviewSections(sections);
     setReportSent(false);
     setView('review');
   };
 
   const regenerateReport = () => {
-    setEditableText(generateOfflineReport(formData));
-    setReviewSource(JSON.stringify(formData));
+    setEditableText(buildReport(reviewSections));
+    setReviewSource(JSON.stringify({ sections: reviewSections, language }));
   };
 
-  // Called whenever a report leaves the app - one history entry per project per day
+  // --- Multi-project report ---
+  const addAnotherProject = () => {
+    setCombined(prev => [...prev.filter(s => s.projectName !== formData.projectName), formData]);
+    setFormData({ ...emptyForm(settings), projectName: '' });
+    setEditableText('');
+    setReviewSource('');
+    setView('form');
+    notify(`${formData.projectName} נוסף לדוח. בחר את הפרויקט הבא`);
+  };
+
+  const editSection = (name: string) => {
+    const section = combined.find(s => s.projectName === name);
+    if (!section) return;
+    const current = formData.projectName && formData.projectName !== name ? formData : null;
+    if (current && !isComplete(current) && current.checkedAreas.trim()) {
+      notify(`קודם השלם את שדות החובה של ${current.projectName}`, 'error');
+      return;
+    }
+    setCombined(prev => [...prev.filter(s => s.projectName !== name), ...(current && isComplete(current) ? [current] : [])]);
+    setFormData(section);
+    setValidationErrors([]);
+  };
+
+  const removeSection = (name: string) => setCombined(prev => prev.filter(s => s.projectName !== name));
+
+  // Called whenever a report leaves the app - one history entry per report per day
   const recordSent = (text: string) => {
     const now = new Date();
+    const items = reviewSections.map(toReportItem);
+    const projectName = items.map(i => i.projectName).join(' + ');
     setHistory(prev => {
-      const rest = prev.filter(e => !(e.projectName === formData.projectName && isSameDay(new Date(e.createdAt), now)));
-      const entry: HistoryEntry = { id: now.getTime().toString(36), createdAt: now.toISOString(), projectName: formData.projectName, text };
+      const rest = prev.filter(e => !(e.projectName === projectName && isSameDay(new Date(e.createdAt), now)));
+      const entry: HistoryEntry = { id: now.getTime().toString(36), createdAt: now.toISOString(), projectName, text, items };
       return [entry, ...rest].slice(0, HISTORY_LIMIT);
     });
     setReportSent(true);
@@ -172,7 +305,8 @@ const App: React.FC = () => {
 
   // Next day: keep project, version, progress, deadline and open issues - clear what was done today
   const startNextReport = () => {
-    setFormData(prev => ({ ...prev, checkedAreas: '', newJiraBugs: '0', blockers: 'אין' }));
+    setFormData(prev => ({ ...prev, status: 'ok', checkedAreas: '', newJiraBugs: '0', blockers: 'אין' }));
+    setCombined([]);
     setEditableText('');
     setReviewSource('');
     setReportSent(false);
@@ -181,17 +315,34 @@ const App: React.FC = () => {
   };
 
   const deadlineDays = daysUntil(formData.estimatedCompletion);
-  const deadlineHint = deadlineDays === null ? null
-    : deadlineDays < 0 ? <span className="text-orange-600">⚠️ התאריך שנבחר כבר עבר</span>
-    : deadlineDays === 0 ? 'היום'
-    : `עוד ${deadlineDays} ימים`;
+  const deadlineHint = (
+    <div className="space-y-1">
+      {deadlineDays !== null && (
+        deadlineDays < 0 ? <p className="text-orange-600">⚠️ התאריך שנבחר כבר עבר</p>
+        : <p>{deadlineDays === 0 ? 'היום' : `עוד ${deadlineDays} ימים`}</p>
+      )}
+      {currentForecast?.kind === 'projected' && (
+        <p className={currentForecast.late ? 'text-orange-600' : 'text-green-700'}>
+          {currentForecast.late ? '⚠️' : '📈'} בקצב הנוכחי: סיום ב-{formatDate(currentForecast.date)}
+        </p>
+      )}
+      {currentForecast?.kind === 'stalled' && <p className="text-orange-600">⚠️ אין התקדמות בימים האחרונים</p>}
+    </div>
+  );
+
+  const reviewIsMulti = reviewSections.length > 1;
 
   return (
     <div className="min-h-screen flex flex-col w-full max-w-lg mx-auto bg-gray-50 border-x border-gray-200 relative font-['Assistant'] overflow-x-hidden">
-      <Header historyCount={history.length} onOpenHistory={() => setView('history')} onOpenSettings={() => setModal('settings')} />
+      <Header
+        historyCount={history.length}
+        onOpenInsights={() => setView('insights')}
+        onOpenHistory={() => setView('history')}
+        onOpenSettings={() => setModal('settings')}
+      />
 
       {modal === 'settings' && (
-        <SettingsModal settings={settings} onChange={setSettings} onProjectRemoved={handleProjectRemoved} onClose={() => setModal(null)} />
+        <SettingsModal settings={settings} reminderState={reminderState} onChange={updateSettings} onProjectRemoved={handleProjectRemoved} onClose={() => setModal(null)} />
       )}
 
       {modal === 'progress' && (
@@ -213,6 +364,17 @@ const App: React.FC = () => {
           />
         )}
 
+        {view === 'insights' && (
+          <InsightsPanel
+            history={history}
+            currentForm={formData}
+            language={language}
+            onCopy={text => handleCopy(text, false)}
+            onShare={text => handleShare(text, false)}
+            onClose={() => setView('form')}
+          />
+        )}
+
         {view === 'form' && (
           <div className="space-y-6 animate-in">
             <div className="flex justify-start">
@@ -226,6 +388,21 @@ const App: React.FC = () => {
               )}
             </div>
 
+            {combined.length > 0 && (
+              <div className="bg-green-50 border-2 border-green-200 p-4 rounded-[24px] space-y-3">
+                <p className="font-black text-green-900 text-sm">דוח משולב להיום · כבר בדוח:</p>
+                <div className="flex flex-wrap gap-2">
+                  {combined.map(s => (
+                    <span key={s.projectName} className="inline-flex items-center gap-1 bg-white border border-green-200 rounded-full pr-3 pl-1 py-1 text-sm font-bold text-gray-800">
+                      <button onClick={() => editSection(s.projectName)} className="font-black">{STATUS_EMOJI[s.status]} {s.projectName}</button>
+                      <button onClick={() => removeSection(s.projectName)} aria-label={`הסר את ${s.projectName} מהדוח`} className="w-7 h-7 rounded-full text-gray-400 hover:bg-gray-100 font-black">✕</button>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-green-800 font-bold">הפרויקט שבטופס יתווסף כחלק נוסף. לחיצה על פרויקט פותחת אותו לעריכה.</p>
+              </div>
+            )}
+
             {/* סעיף 1: כללי */}
             <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-6">
               <div className="border-r-4 border-green-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">פרטים וגרסה</h2></div>
@@ -238,14 +415,32 @@ const App: React.FC = () => {
                 </div>
                 <select id="projectName" name="projectName" value={formData.projectName} onChange={handleInputChange} className={`w-full p-4 bg-white border-2 rounded-2xl font-bold text-lg text-right ${validationErrors.includes('projectName') ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
                   <option value="">{allProjects.length === 0 ? '-- קודם הוסף פרויקט בהגדרות --' : 'בחר פרויקט...'}</option>
-                  {allProjects.map(p => <option key={p} value={p}>{p}</option>)}
+                  {allProjects.map(p => (
+                    <option key={p} value={p} disabled={combined.some(s => s.projectName === p) && p !== formData.projectName}>{p}</option>
+                  ))}
                 </select>
                 {validationErrors.includes('projectName') && <p className="text-xs text-red-600 font-bold pr-1">שדה חובה</p>}
               </div>
               <FormInput name="version" label="גרסה" value={formData.version} isError={false} placeholder="1.2.3" inputMode="decimal" onChange={handleInputChange} isRequired={false} helper="לא חובה. ספרות ונקודות, לדוגמה 2.10.1" />
             </div>
 
-            {/* סעיף 2: התקדמות וצפי */}
+            {/* סעיף 2: סטטוס */}
+            <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-4">
+              <div className="border-r-4 border-green-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">סטטוס היום</h2></div>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="סטטוס היום">
+                {STATUS_OPTIONS.map(o => (
+                  <button
+                    key={o.value}
+                    role="radio"
+                    aria-checked={formData.status === o.value}
+                    onClick={() => setFormData(prev => ({ ...prev, status: o.value }))}
+                    className={`py-4 rounded-2xl font-black border-2 transition-all active:scale-95 ${formData.status === o.value ? o.active : 'bg-white border-gray-200 text-gray-600'}`}
+                  >{STATUS_EMOJI[o.value]} {o.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* סעיף 3: התקדמות וצפי */}
             <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-6">
               <div className="border-r-4 border-green-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">התקדמות וזמנים</h2></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -267,21 +462,43 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* סעיף 3: מה נעשה היום */}
-            <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-6">
+            {/* סעיף 4: מה נעשה היום */}
+            <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-4">
               <div className="border-r-4 border-green-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">מה נבדק היום?</h2></div>
-              <FormInput name="checkedAreas" label="אזורים שנבדקו" value={formData.checkedAreas} isError={validationErrors.includes('checkedAreas')} placeholder="פירוט תהליכים ומסכים..." isTextArea maxLength={2000} onChange={handleInputChange} helper="מה בדקת בפועל במהלך היום?" />
+              {settings.templates.length > 0 && (
+                <div className="flex flex-wrap gap-2" aria-label="תבניות מהירות">
+                  {settings.templates.map(t => {
+                    const active = formData.checkedAreas.split('\n').some(l => l.replace(/^•\s*/, '').trim() === t);
+                    return (
+                      <button
+                        key={t}
+                        aria-pressed={active}
+                        onClick={() => toggleTemplate(t)}
+                        className={`px-3 py-2 rounded-full text-sm font-bold border-2 transition-all active:scale-95 ${active ? 'bg-green-600 border-green-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+                      >{active ? '✓ ' : '+ '}{t}</button>
+                    );
+                  })}
+                </div>
+              )}
+              <FormInput name="checkedAreas" label="אזורים שנבדקו" value={formData.checkedAreas} isError={validationErrors.includes('checkedAreas')} placeholder="פירוט תהליכים ומסכים..." isTextArea maxLength={2000} onChange={handleInputChange} helper="בחר תבניות למעלה או כתוב בחופשיות" />
             </div>
 
-            {/* סעיף 4: באגים וסיכונים */}
+            {/* סעיף 5: באגים וסיכונים */}
             <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-6">
               <div className="border-r-4 border-red-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">באגים וסיכונים</h2></div>
               <NumberStepper name="newJiraBugs" label="באגים חדשים ב-Jira" value={formData.newJiraBugs} isError={false} onUpdate={updateNumber} onChange={handleInputChange} max={999} isRequired={false} />
-              <FormInput name="blockers" label="חוסמים (Blockers)" value={formData.blockers} isError={false} placeholder="פרט חוסמים או 'אין'" maxLength={500} onChange={handleInputChange} isRequired={false} helper="מה מפריע לך להתקדם?" />
+              <FormInput
+                name="blockers" label="חוסמים (Blockers)" value={formData.blockers} isError={false} placeholder="פרט חוסמים או 'אין'" maxLength={500} onChange={handleInputChange} isRequired={false}
+                helper={hasBlockers(formData.blockers) && formData.status === 'ok' ? (
+                  <button onClick={() => setFormData(prev => ({ ...prev, status: 'blocked' }))} className="text-red-600 underline">יש חוסמים: לסמן את הסטטוס כ-🔴 חסום?</button>
+                ) : 'מה מפריע לך להתקדם?'}
+              />
               <FormInput name="openIssues" label="נושאים פתוחים" value={formData.openIssues} isError={false} placeholder="נושאים למעקב..." isTextArea maxLength={2000} onChange={handleInputChange} isRequired={false} helper="נשמרים גם לדוח של מחר." />
             </div>
 
-            <button onClick={prepareForReview} className="w-full bg-green-600 text-white font-black py-6 rounded-[24px] shadow-xl active:scale-95 transition-all text-xl">תצוגה מקדימה וייצור דוח ✨</button>
+            <button onClick={prepareForReview} className="w-full bg-green-600 text-white font-black py-6 rounded-[24px] shadow-xl active:scale-95 transition-all text-xl">
+              {combined.length > 0 ? `תצוגה מקדימה · ${combined.length + 1} פרויקטים ✨` : 'תצוגה מקדימה וייצור דוח ✨'}
+            </button>
           </div>
         )}
 
@@ -289,11 +506,11 @@ const App: React.FC = () => {
           <div className="space-y-6 animate-in">
             <div className="bg-white p-6 rounded-[40px] border-4 border-green-600 shadow-2xl space-y-5">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-xl font-black">הדוח מוכן! 🚀</h3>
+                <h3 className="text-xl font-black">{reviewIsMulti ? `דוח משולב (${reviewSections.length}) מוכן! 🚀` : 'הדוח מוכן! 🚀'}</h3>
                 <button onClick={regenerateReport} className="text-xs font-black text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">↺ צור מחדש</button>
               </div>
-              <p className="text-xs text-gray-500 font-bold -mt-2">אפשר לערוך את הטקסט לפני השליחה.</p>
-              <textarea value={editableText} onChange={(e) => setEditableText(e.target.value)} className="w-full h-80 p-5 bg-gray-50 border-2 rounded-2xl font-bold text-lg text-right leading-relaxed" dir="rtl" aria-label="טקסט הדוח" />
+              <p className="text-xs text-gray-500 font-bold -mt-2">אפשר לערוך את הטקסט לפני השליחה · שפת הדוח: {language === 'en' ? 'English' : 'עברית'}</p>
+              <textarea value={editableText} onChange={(e) => setEditableText(e.target.value)} className="w-full h-80 p-5 bg-gray-50 border-2 border-gray-200 rounded-2xl font-bold text-lg leading-relaxed" dir={language === 'en' ? 'ltr' : 'rtl'} aria-label="טקסט הדוח" />
               <div className="flex flex-col gap-3">
                 <button onClick={() => handleWhatsApp(editableText, true)} disabled={!editableText.trim()} className="w-full py-5 rounded-2xl font-black text-lg shadow-md bg-green-600 text-white disabled:opacity-40">שלח בוואטסאפ 💬</button>
                 <div className="grid grid-cols-2 gap-3">
@@ -302,6 +519,9 @@ const App: React.FC = () => {
                     {copySuccess ? 'הועתק! ✅' : 'העתק 📋'}
                   </button>
                 </div>
+                {!reportSent && allProjects.length > reviewSections.length && (
+                  <button onClick={addAnotherProject} className="w-full py-3 rounded-2xl font-black border-2 border-dashed border-gray-300 text-gray-600">➕ הוסף פרויקט נוסף לדוח</button>
+                )}
                 <button onClick={() => setView('form')} className="w-full text-gray-500 font-bold py-2">→ חזור לעריכה</button>
               </div>
             </div>
