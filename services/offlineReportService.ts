@@ -1,6 +1,9 @@
 
-import { FormData, ReportItem, ReportLanguage, ReportStatus } from "../types";
-import { REPORT_STRINGS } from "./reportText";
+import { FormData, ReportLanguage, ReportStatus } from "../types";
+import { REPORT_STRINGS, STATUS_EMOJI } from "./reportText";
+import type { ChangeSummary, TestStats } from "./daily";
+
+export { STATUS_EMOJI };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -26,8 +29,6 @@ export const daysUntil = (iso: string, from: Date = new Date()): number | null =
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 };
 
-export const STATUS_EMOJI: Record<ReportStatus, string> = { ok: '🟢', risk: '🟡', blocked: '🔴' };
-
 const STATUS_RANK: Record<ReportStatus, number> = { ok: 0, risk: 1, blocked: 2 };
 
 export const worstStatus = (statuses: ReportStatus[]): ReportStatus =>
@@ -49,30 +50,25 @@ export const hasBlockers = (blockers: string) => {
   return b !== '' && b !== 'אין' && b !== '-' && b !== 'none';
 };
 
-export const toReportItem = (f: FormData): ReportItem => ({
-  projectName: f.projectName.trim(),
-  version: f.version.trim(),
-  status: f.status,
-  progress: parseInt(toNumberField(f.progressPercentage, 100) || '0', 10),
-  bugs: parseInt(toNumberField(f.newJiraBugs, 999) || '0', 10),
-  blockers: f.blockers.trim(),
-  openIssues: f.openIssues.trim(),
-  deadline: f.estimatedCompletion,
-});
-
 export const SEPARATOR = '-----------------------';
 
-// Late forecasts per project name, shown as a warning line in that project's section
-export type ForecastNotes = Record<string, Date | undefined>;
+// Everything about a section that comes from history rather than from the form
+export interface SectionExtras {
+  lateForecast?: Date;
+  change?: ChangeSummary | null;
+  openBugs?: number | null;
+  tests?: TestStats | null;
+  blockers?: { text: string; age: number }[];
+}
 
 interface ReportOptions {
   language?: ReportLanguage;
-  lateForecasts?: ForecastNotes;
+  extras?: Record<string, SectionExtras>;
   now?: Date;
 }
 
 // One project, or several projects in one message with an overall status on top
-export const generateOfflineReport = (sections: FormData[], { language = 'he', lateForecasts = {}, now = new Date() }: ReportOptions = {}): string => {
+export const generateOfflineReport = (sections: FormData[], { language = 'he', extras = {}, now = new Date() }: ReportOptions = {}): string => {
   const t = REPORT_STRINGS[language];
   const multi = sections.length > 1;
   const overall = worstStatus(sections.map(s => s.status));
@@ -84,21 +80,33 @@ export const generateOfflineReport = (sections: FormData[], { language = 'he', l
     return `${formatDate(date)} (${t.deadlineWhen(days)})`;
   };
 
+  const describeBlockers = (f: FormData, x: SectionExtras) => {
+    if (x.blockers?.length) return x.blockers.map(b => (b.age >= 2 ? `${b.text} ${t.blockerDay(b.age)}` : b.text)).join('; ');
+    return hasBlockers(f.blockers) ? f.blockers.trim() : t.none;
+  };
+
   const section = (f: FormData): string[] => {
+    const x = extras[f.projectName] ?? {};
     const version = f.version.trim();
-    const late = lateForecasts[f.projectName];
+    const bugParts = [
+      t.bugsNew(parseInt(toNumberField(f.newJiraBugs, 999) || '0', 10)),
+      ...(parseInt(toNumberField(f.bugsClosed, 999) || '0', 10) > 0 ? [t.bugsClosed(parseInt(f.bugsClosed, 10))] : []),
+      ...(x.openBugs != null ? [t.bugsOpen(x.openBugs)] : []),
+    ];
     return [
       `🚀 *${t.project}:* ${f.projectName.trim()}${version ? ` (${t.version(version)})` : ''}`,
       ...(multi ? [`${STATUS_EMOJI[f.status]} *${t.status}:* ${t.statusLabels[f.status]}`] : []),
       `📊 *${t.progress}:* ${toNumberField(f.progressPercentage, 100) || '0'}%`,
       `📅 *${t.deadline}:* ${describeDeadline(f.estimatedCompletion)}`,
-      ...(late ? [`⚠️ *${t.atCurrentPace}:* ${t.expectedOn(formatDate(late))}`] : []),
+      ...(x.lateForecast ? [`⚠️ *${t.atCurrentPace}:* ${t.expectedOn(formatDate(x.lateForecast))}`] : []),
+      ...(x.tests ? [`🧪 *${t.tests}:* ${t.testsSummary(x.tests)}`] : []),
+      ...(x.change ? [`🔄 *${t.changeLabel(x.change.sinceYesterday, formatShortDate(x.change.since))}:* ${t.changeParts(x.change).join(' · ')}`] : []),
       '',
       `✅ *${t.doneToday}:*`,
       f.checkedAreas.trim(),
       '',
-      `🐞 *${t.newBugs}:* ${toNumberField(f.newJiraBugs, 999) || '0'}`,
-      `🚫 *${t.blockers}:* ${hasBlockers(f.blockers) ? f.blockers.trim() : t.none}`,
+      `🐞 *${t.bugs}:* ${bugParts.join(' · ')}`,
+      `🚫 *${t.blockers}:* ${describeBlockers(f, x)}`,
       '',
       `📝 *${t.openIssues}:*`,
       f.openIssues.trim() || t.none,

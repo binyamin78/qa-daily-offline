@@ -3,7 +3,7 @@ import { HistoryEntry, ReportItem, ReportStatus } from '../types';
 import { forecastCompletion, generateWeeklySummary, projectSeries, summarizeWeek, weekRange } from '../services/insights';
 
 const item = (projectName: string, progress: number, patch: Partial<ReportItem> = {}): ReportItem => ({
-  projectName, version: '', status: 'ok' as ReportStatus, progress, bugs: 0, blockers: 'אין', openIssues: '', deadline: '2026-11-05', ...patch,
+  projectName, version: '', status: 'ok' as ReportStatus, progress, bugs: 0, bugsClosed: 0, openBugs: null, testsPlanned: null, testsPassed: null, testsFailed: null, blockers: 'אין', openIssues: '', deadline: '2026-11-05', ...patch,
 });
 
 const entry = (date: Date, items: ReportItem[]): HistoryEntry => ({

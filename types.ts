@@ -7,6 +7,11 @@ export interface FormData {
   status: ReportStatus;
   checkedAreas: string;
   newJiraBugs: string;
+  bugsClosed: string;
+  openBugs: string; // manual override; '' = calculated from the previous report
+  testsPlanned: string;
+  testsPassed: string;
+  testsFailed: string;
   blockers: string;
   openIssues: string;
   estimatedCompletion: string;
@@ -39,6 +44,11 @@ export interface ReportItem {
   status: ReportStatus;
   progress: number;
   bugs: number;
+  bugsClosed: number;
+  openBugs: number | null;
+  testsPlanned: number | null;
+  testsPassed: number | null;
+  testsFailed: number | null;
   blockers: string;
   openIssues: string;
   deadline: string;

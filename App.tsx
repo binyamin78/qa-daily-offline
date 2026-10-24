@@ -7,16 +7,19 @@ import ProgressPicker from './components/ProgressPicker';
 import SettingsModal from './components/SettingsModal';
 import HistoryPanel from './components/HistoryPanel';
 import InsightsPanel from './components/InsightsPanel';
+import TodayBoard from './components/TodayBoard';
 import { FormData, AppSettings, HistoryEntry, ReportStatus } from './types';
 import {
   generateOfflineReport, formatVersion, toNumberField, daysUntil, isSameDay, formatDate,
-  toReportItem, hasBlockers, STATUS_EMOJI, ForecastNotes,
+  hasBlockers, STATUS_EMOJI, SectionExtras,
 } from './services/offlineReportService';
 import {
   loadSettings, saveSettings, loadDraft, saveDraft, emptyForm, loadHistory, saveHistory,
   loadCombined, saveCombined, HISTORY_LIMIT,
 } from './services/storage';
-import { forecastCompletion, projectSeries } from './services/insights';
+import { formTestStats, OLD_BLOCKER_DAYS } from './services/daily';
+import { sectionContext, todayOverview } from './services/projectContext';
+import { REPORT_STRINGS } from './services/reportText';
 import { copyText, shareText, openWhatsApp, isNative } from './services/shareService';
 import { syncReminders, ReminderResult } from './services/reminderService';
 
@@ -25,7 +28,13 @@ type Modal = 'settings' | 'progress' | null;
 type Toast = { text: string; tone: 'info' | 'error' } | null;
 
 const REQUIRED_FIELDS: (keyof FormData)[] = ['projectName', 'progressPercentage', 'estimatedCompletion', 'checkedAreas'];
-const NUMBER_LIMITS: Partial<Record<keyof FormData, number>> = { newJiraBugs: 999, progressPercentage: 100 };
+const NUMBER_LIMITS: Partial<Record<keyof FormData, number>> = {
+  newJiraBugs: 999, bugsClosed: 999, openBugs: 9999, progressPercentage: 100,
+  testsPlanned: 99999, testsPassed: 99999, testsFailed: 99999,
+};
+const UI_TEXT = REPORT_STRINGS.he;
+
+type MemoryFields = 'version' | 'progressPercentage' | 'estimatedCompletion' | 'openIssues' | 'testsPlanned' | 'testsPassed' | 'testsFailed' | 'bugsClosed' | 'openBugs' | 'blockers';
 const REPORT_TITLE = 'דיווח QA יומי';
 
 const STATUS_OPTIONS: { value: ReportStatus; label: string; active: string }[] = [
@@ -139,22 +148,29 @@ const App: React.FC = () => {
   };
 
   // Project-specific fields come back from the last report of that project
-  const projectMemory = (name: string): Pick<FormData, 'version' | 'progressPercentage' | 'estimatedCompletion' | 'openIssues'> => {
+  // Test counts are per test cycle and blockers stay until resolved, so they carry over; bug counts are per day
+  const projectMemory = (name: string): Pick<FormData, MemoryFields> => {
     const section = combined.find(s => s.projectName === name);
     if (section) return section;
     const item = history.map(e => e.items?.find(i => i.projectName === name)).find(Boolean);
-    if (item) return { version: item.version, progressPercentage: String(item.progress), estimatedCompletion: item.deadline, openIssues: item.openIssues };
-    return { version: settings.defaultVersion, progressPercentage: '0', estimatedCompletion: '', openIssues: '' };
+    const str = (n: number | null) => (n === null ? '' : String(n));
+    if (item) return {
+      version: item.version, progressPercentage: String(item.progress), estimatedCompletion: item.deadline, openIssues: item.openIssues,
+      testsPlanned: str(item.testsPlanned), testsPassed: str(item.testsPassed), testsFailed: str(item.testsFailed),
+      bugsClosed: '0', openBugs: '', blockers: item.blockers || 'אין',
+    };
+    return {
+      version: settings.defaultVersion, progressPercentage: '0', estimatedCompletion: '', openIssues: '',
+      testsPlanned: '', testsPassed: '', testsFailed: '', bugsClosed: '0', openBugs: '', blockers: 'אין',
+    };
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const name = e.target.name as keyof FormData;
     let value = e.target.value;
     if (name === 'projectName') {
-      if (value !== formData.projectName) {
-        setFormData(prev => ({ ...prev, projectName: value, ...(value ? projectMemory(value) : {}) }));
-        setValidationErrors(prev => prev.filter(f => f !== 'projectName'));
-      }
+      if (value) selectProject(value);
+      else setField('projectName', '');
       return;
     }
     if (name === 'version') value = formatVersion(value);
@@ -193,27 +209,27 @@ const App: React.FC = () => {
     setCombined(prev => prev.filter(s => s.projectName !== name));
   };
 
-  // --- Forecasts ---
-  const currentForecast = useMemo(() => {
-    if (!formData.projectName) return null;
-    const progress = parseInt(toNumberField(formData.progressPercentage, 100) || '0', 10);
-    return forecastCompletion(projectSeries(history, formData.projectName), formData.estimatedCompletion, { date: new Date(), progress });
-  }, [history, formData.projectName, formData.progressPercentage, formData.estimatedCompletion]);
-
-  const lateForecastsFor = (sections: FormData[]): ForecastNotes => {
-    const notes: ForecastNotes = {};
-    for (const s of sections) {
-      const progress = parseInt(toNumberField(s.progressPercentage, 100) || '0', 10);
-      const f = forecastCompletion(projectSeries(history, s.projectName), s.estimatedCompletion, { date: new Date(), progress });
-      if (f.kind === 'projected' && f.late) notes[s.projectName] = f.date;
-    }
-    return notes;
-  };
+  // --- History context for the current project: forecast, change since last report, blocker ages, open bugs ---
+  const ctx = useMemo(() => (formData.projectName ? sectionContext(history, formData) : null), [history, formData]);
+  const currentForecast = ctx?.forecast ?? null;
+  const overview = useMemo(() => todayOverview(allProjects, history, formData, combined), [allProjects, history, formData, combined]);
+  const tests = formTestStats(formData);
 
   // --- Report ---
   const currentSections = (form: FormData = formData) => [...combined.filter(s => s.projectName !== form.projectName), form];
 
-  const buildReport = (sections: FormData[]) => generateOfflineReport(sections, { language, lateForecasts: lateForecastsFor(sections) });
+  const buildReport = (sections: FormData[]) => {
+    const extras: Record<string, SectionExtras> = {};
+    sections.forEach(s => { extras[s.projectName] = sectionContext(history, s).extras; });
+    return generateOfflineReport(sections, { language, extras });
+  };
+
+  const selectProject = (name: string) => {
+    if (name === formData.projectName) return;
+    if (combined.some(s => s.projectName === name)) { editSection(name); return; }
+    setFormData(prev => ({ ...prev, projectName: name, ...projectMemory(name) }));
+    setValidationErrors(prev => prev.filter(f => f !== 'projectName'));
+  };
 
   const prepareForReview = () => {
     const missing = REQUIRED_FIELDS.filter(key => !String(formData[key]).trim());
@@ -270,7 +286,7 @@ const App: React.FC = () => {
   // Called whenever a report leaves the app - one history entry per report per day
   const recordSent = (text: string) => {
     const now = new Date();
-    const items = reviewSections.map(toReportItem);
+    const items = reviewSections.map(s => sectionContext(history, s, now).item);
     const projectName = items.map(i => i.projectName).join(' + ');
     setHistory(prev => {
       const rest = prev.filter(e => !(e.projectName === projectName && isSameDay(new Date(e.createdAt), now)));
@@ -305,7 +321,8 @@ const App: React.FC = () => {
 
   // Next day: keep project, version, progress, deadline and open issues - clear what was done today
   const startNextReport = () => {
-    setFormData(prev => ({ ...prev, status: 'ok', checkedAreas: '', newJiraBugs: '0', blockers: 'אין' }));
+    // open bugs are recalculated tomorrow from today's report; blockers stay until resolved
+    setFormData(prev => ({ ...prev, status: 'ok', checkedAreas: '', newJiraBugs: '0', bugsClosed: '0', openBugs: '' }));
     setCombined([]);
     setEditableText('');
     setReviewSource('');
@@ -377,6 +394,8 @@ const App: React.FC = () => {
 
         {view === 'form' && (
           <div className="space-y-6 animate-in">
+            {overview.length > 0 && <TodayBoard overview={overview} currentProject={formData.projectName} onSelect={selectProject} />}
+
             <div className="flex justify-start">
               {!showClearConfirm ? (
                 <button onClick={() => setShowClearConfirm(true)} className="bg-red-50 text-red-600 text-xs font-black py-2.5 px-5 rounded-full border border-red-100 active:scale-95">🗑️ נקה טופס</button>
@@ -438,6 +457,12 @@ const App: React.FC = () => {
                   >{STATUS_EMOJI[o.value]} {o.label}</button>
                 ))}
               </div>
+              {ctx?.extras.change && (
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 text-sm font-bold text-gray-700">
+                  <span className="font-black text-gray-900">🔄 {UI_TEXT.changeLabel(ctx.extras.change.sinceYesterday, formatDate(ctx.extras.change.since))}: </span>
+                  {UI_TEXT.changeParts(ctx.extras.change).join(' · ')}
+                </div>
+              )}
             </div>
 
             {/* סעיף 3: התקדמות וצפי */}
@@ -460,6 +485,34 @@ const App: React.FC = () => {
                 </div>
                 <FormInput name="estimatedCompletion" type="date" label="צפי סיום" value={formData.estimatedCompletion} isError={validationErrors.includes('estimatedCompletion')} placeholder="" onChange={handleInputChange} helper={deadlineHint} />
               </div>
+            </div>
+
+            {/* ביצוע בדיקות (מחזור נוכחי) */}
+            <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-4">
+              <div className="border-r-4 border-green-600 pr-3 text-right">
+                <h2 className="text-lg font-black text-gray-900">ביצוע בדיקות</h2>
+                <p className="text-xs text-gray-500 font-bold">לא חובה · סה"כ במחזור הבדיקות הנוכחי, נשמר גם למחר</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([['testsPlanned', 'מתוכננות'], ['testsPassed', 'עברו ✓'], ['testsFailed', 'נכשלו ✗']] as [keyof FormData, string][]).map(([name, label]) => (
+                  <div key={name} className="space-y-1">
+                    <label htmlFor={name} className="block text-sm font-extrabold text-gray-900 text-center">{label}</label>
+                    <input id={name} name={name} type="text" inputMode="numeric" autoComplete="off" value={formData[name]} onChange={handleInputChange} placeholder="—" className="w-full p-3 bg-white border-2 border-gray-300 rounded-2xl font-black text-lg text-center" />
+                  </div>
+                ))}
+              </div>
+              {tests && (
+                <div className="space-y-2">
+                  {tests.planned ? (
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex" dir="rtl" aria-hidden="true">
+                      <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (tests.passed / tests.planned) * 100)}%` }} />
+                      <div className="h-full bg-red-500" style={{ width: `${Math.min(100, (tests.failed / tests.planned) * 100)}%` }} />
+                    </div>
+                  ) : null}
+                  <p className="text-sm font-black text-gray-700">🧪 {UI_TEXT.testsSummary(tests)}</p>
+                  {tests.overPlanned && <p className="text-xs font-bold text-orange-600">⚠️ בוצעו יותר בדיקות מהמתוכנן. כדאי לעדכן את מספר המתוכננות.</p>}
+                </div>
+              )}
             </div>
 
             {/* סעיף 4: מה נעשה היום */}
@@ -486,13 +539,41 @@ const App: React.FC = () => {
             {/* סעיף 5: באגים וסיכונים */}
             <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-6">
               <div className="border-r-4 border-red-600 pr-3 text-right"><h2 className="text-lg font-black text-gray-900">באגים וסיכונים</h2></div>
-              <NumberStepper name="newJiraBugs" label="באגים חדשים ב-Jira" value={formData.newJiraBugs} isError={false} onUpdate={updateNumber} onChange={handleInputChange} max={999} isRequired={false} />
+              <div className="grid grid-cols-2 gap-3">
+                <NumberStepper name="newJiraBugs" label="באגים חדשים" value={formData.newJiraBugs} isError={false} onUpdate={updateNumber} onChange={handleInputChange} max={999} isRequired={false} />
+                <NumberStepper name="bugsClosed" label="נסגרו / אומתו" value={formData.bugsClosed} isError={false} onUpdate={updateNumber} onChange={handleInputChange} max={999} isRequired={false} />
+              </div>
+              {formData.openBugs === '' && ctx && ctx.previousOpen !== null ? (
+                <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                  <div>
+                    <p className="font-black text-gray-900">🐞 באגים פתוחים: {ctx.item.openBugs}</p>
+                    <p className="text-xs font-bold text-gray-500">בדוח הקודם {ctx.previousOpen} · +{toNumberField(formData.newJiraBugs, 999) || 0} חדשים · −{toNumberField(formData.bugsClosed, 999) || 0} נסגרו</p>
+                  </div>
+                  <button onClick={() => setField('openBugs', String(ctx.item.openBugs ?? 0))} className="shrink-0 text-xs font-black text-gray-600 bg-white border border-gray-300 px-3 py-2 rounded-xl">תקן מספר</button>
+                </div>
+              ) : (
+                <FormInput
+                  name="openBugs" label="באגים פתוחים כרגע" value={formData.openBugs} isError={false} placeholder="לדוגמה 12" inputMode="numeric" onChange={handleInputChange} isRequired={false}
+                  helper={ctx?.previousOpen != null ? (
+                    <button onClick={() => setField('openBugs', '')} className="text-green-700 underline">חזור לחישוב אוטומטי מהדוח הקודם</button>
+                  ) : 'לא חובה. מזינים פעם אחת לפי Jira, ומהדוח הבא המספר יתעדכן לבד לפי חדשים פחות נסגרו.'}
+                />
+              )}
               <FormInput
-                name="blockers" label="חוסמים (Blockers)" value={formData.blockers} isError={false} placeholder="פרט חוסמים או 'אין'" maxLength={500} onChange={handleInputChange} isRequired={false}
+                name="blockers" label="חוסמים (Blockers)" value={formData.blockers} isError={false} placeholder="חוסם בכל שורה, או 'אין'" isTextArea maxLength={500} onChange={handleInputChange} isRequired={false}
                 helper={hasBlockers(formData.blockers) && formData.status === 'ok' ? (
                   <button onClick={() => setFormData(prev => ({ ...prev, status: 'blocked' }))} className="text-red-600 underline">יש חוסמים: לסמן את הסטטוס כ-🔴 חסום?</button>
-                ) : 'מה מפריע לך להתקדם?'}
+                ) : 'כל חוסם בשורה נפרדת, כדי שנוכל לספור כמה ימים הוא פתוח.'}
               />
+              {ctx && (ctx.extras.blockers ?? []).some(b => b.age >= 2) && (
+                <div className="flex flex-wrap gap-2 -mt-3" aria-label="גיל החוסמים">
+                  {(ctx.extras.blockers ?? []).filter(b => b.age >= 2).map(b => (
+                    <span key={b.text} className={`text-xs font-black px-3 py-1.5 rounded-full border ${b.age >= OLD_BLOCKER_DAYS ? 'bg-red-50 text-red-600 border-red-100' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      🚫 {b.text} · יום {b.age}{b.age >= OLD_BLOCKER_DAYS ? ' · דורש טיפול' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
               <FormInput name="openIssues" label="נושאים פתוחים" value={formData.openIssues} isError={false} placeholder="נושאים למעקב..." isTextArea maxLength={2000} onChange={handleInputChange} isRequired={false} helper="נשמרים גם לדוח של מחר." />
             </div>
 

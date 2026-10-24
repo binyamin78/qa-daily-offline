@@ -2,38 +2,24 @@
 import { HistoryEntry, ReportItem, ReportLanguage, ReportStatus } from '../types';
 import { formatDate, formatShortDate, hasBlockers, parseIsoDate, SEPARATOR, STATUS_EMOJI, worstStatus } from './offlineReportService';
 import { REPORT_STRINGS } from './reportText';
+import { dayNumber, fromDayNumber, projectDays } from './days';
+import { itemTestStats, TestStats } from './daily';
 
-// Calendar-day number that ignores DST shifts
-export const dayNumber = (d: Date) => Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
-export const fromDayNumber = (n: number) => {
-  const u = new Date(n * 86_400_000);
-  return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
-};
+export { dayNumber, fromDayNumber };
 
 export interface ProgressPoint {
   day: number;
   date: Date;
   progress: number;
   status: ReportStatus;
+  openBugs: number | null;
 }
 
 // The latest report item per day for one project, oldest first
-export const projectSeries = (history: HistoryEntry[], projectName: string): ProgressPoint[] => {
-  const byDay = new Map<number, ProgressPoint & { at: number }>();
-  for (const entry of history) {
-    const at = new Date(entry.createdAt);
-    if (isNaN(at.getTime())) continue;
-    for (const item of entry.items ?? []) {
-      if (item.projectName !== projectName) continue;
-      const day = dayNumber(at);
-      const prev = byDay.get(day);
-      if (!prev || prev.at < at.getTime()) {
-        byDay.set(day, { day, date: fromDayNumber(day), progress: item.progress, status: item.status, at: at.getTime() });
-      }
-    }
-  }
-  return [...byDay.values()].sort((a, b) => a.day - b.day).map(({ at: _at, ...p }) => p);
-};
+export const projectSeries = (history: HistoryEntry[], projectName: string): ProgressPoint[] =>
+  projectDays(history, projectName).map(({ day, item }) => ({
+    day, date: fromDayNumber(day), progress: item.progress, status: item.status, openBugs: item.openBugs,
+  }));
 
 export const projectsWithData = (history: HistoryEntry[]): string[] => {
   const names = new Set<string>();
@@ -93,6 +79,9 @@ interface WeeklyProject {
   firstProgress: number;
   lastProgress: number;
   bugs: number;
+  bugsClosed: number;
+  openBugs: { from: number; to: number } | null;
+  tests: TestStats | null;
   statuses: Record<ReportStatus, number>;
   blockers: string[];
   deadline: string;
@@ -126,12 +115,17 @@ export const summarizeWeek = (history: HistoryEntry[], start: Date, end: Date): 
     const statuses: Record<ReportStatus, number> = { ok: 0, risk: 0, blocked: 0 };
     sorted.forEach(i => statuses[i.status]++);
     const blockers = [...new Set(sorted.filter(i => hasBlockers(i.blockers)).map(i => i.blockers))];
+    const withOpen = sorted.filter(i => i.openBugs !== null);
+    const last = sorted[sorted.length - 1];
     return {
       name,
       days: sorted.length,
       firstProgress: sorted[0].progress,
-      lastProgress: sorted[sorted.length - 1].progress,
+      lastProgress: last.progress,
       bugs: sorted.reduce((s, i) => s + i.bugs, 0),
+      bugsClosed: sorted.reduce((s, i) => s + i.bugsClosed, 0),
+      openBugs: withOpen.length ? { from: withOpen[0].openBugs as number, to: withOpen[withOpen.length - 1].openBugs as number } : null,
+      tests: itemTestStats(last),
       statuses,
       blockers,
       deadline: sorted[sorted.length - 1].deadline,
@@ -164,7 +158,12 @@ export const generateWeeklySummary = (
     lines.push(
       `🚀 *${p.name}* (${t.reportDays(p.days)})`,
       `📈 *${t.progress}:* ${t.progressChange(p.firstProgress, p.lastProgress)}`,
-      `🐞 *${t.newBugs}:* ${p.bugs}`,
+      `🐞 *${t.bugs}:* ${[
+        t.bugsNew(p.bugs),
+        t.bugsClosed(p.bugsClosed),
+        ...(p.openBugs ? [t.openBugsTrend(p.openBugs.from, p.openBugs.to)] : []),
+      ].join(' · ')}`,
+      ...(p.tests ? [`🧪 *${t.tests}:* ${t.testsSummary(p.tests)}`] : []),
       `🚦 *${t.statusBreakdown}:* ${statusText}`,
       `🚫 *${t.blockers}:* ${p.blockers.length ? p.blockers.join('; ') : t.none}`,
       `📅 *${t.deadline}:* ${deadline ? formatDate(deadline) : t.notSet}`,

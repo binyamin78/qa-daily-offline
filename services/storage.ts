@@ -45,6 +45,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const num = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : 0);
+const numOrNull = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : null);
 const strList = (v: unknown) => (Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []);
 export const asStatus = (v: unknown): ReportStatus => (STATUSES.includes(v as ReportStatus) ? (v as ReportStatus) : 'ok');
 
@@ -93,6 +94,11 @@ export const emptyForm = (settings: AppSettings): FormData => ({
   status: 'ok',
   checkedAreas: '',
   newJiraBugs: '0',
+  bugsClosed: '0',
+  openBugs: '',
+  testsPlanned: '',
+  testsPassed: '',
+  testsFailed: '',
   blockers: 'אין',
   openIssues: '',
   estimatedCompletion: '',
@@ -139,6 +145,11 @@ const toItem = (v: Record<string, unknown>): ReportItem => ({
   status: asStatus(v.status),
   progress: num(v.progress),
   bugs: num(v.bugs),
+  bugsClosed: num(v.bugsClosed),
+  openBugs: numOrNull(v.openBugs),
+  testsPlanned: numOrNull(v.testsPlanned),
+  testsPassed: numOrNull(v.testsPassed),
+  testsFailed: numOrNull(v.testsFailed),
   blockers: str(v.blockers),
   openIssues: str(v.openIssues),
   deadline: str(v.deadline),

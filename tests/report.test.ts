@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FormData } from '../types';
-import { formatVersion, generateOfflineReport, hasBlockers, toNumberField, toReportItem, worstStatus } from '../services/offlineReportService';
+import { formatVersion, generateOfflineReport, hasBlockers, toNumberField, worstStatus } from '../services/offlineReportService';
+import { toReportItem } from '../services/daily';
 
 const NOW = new Date(2026, 9, 23, 17, 0); // 23/10/2026
 
@@ -10,6 +11,11 @@ const form = (patch: Partial<FormData> = {}): FormData => ({
   status: 'ok',
   checkedAreas: '  בדיקות רגרסיה  ',
   newJiraBugs: '3',
+  bugsClosed: '0',
+  openBugs: '',
+  testsPlanned: '',
+  testsPassed: '',
+  testsFailed: '',
   blockers: 'אין',
   openIssues: '',
   estimatedCompletion: '2026-10-30',
@@ -25,7 +31,7 @@ describe('generateOfflineReport', () => {
     expect(text).toContain('🚀 *פרויקט:* Alpha (גרסה 2.10.1)');
     expect(text).toContain('📊 *התקדמות:* 75%');
     expect(text).toContain('📅 *צפי סיום:* 30/10/2026 (בעוד 7 ימים)');
-    expect(text).toContain('🐞 *באגים חדשים (Jira):* 3');
+    expect(text).toContain('🐞 *באגים (Jira):* 3 חדשים');
     expect(text).toContain('🚫 *חוסמים:* אין');
     // user text is trimmed
     expect(text).toContain('\nבדיקות רגרסיה\n');
@@ -67,7 +73,7 @@ describe('generateOfflineReport', () => {
   });
 
   it('adds a warning line when the forecast is past the deadline', () => {
-    const text = generateOfflineReport([form()], { now: NOW, lateForecasts: { Alpha: new Date(2026, 10, 12) } });
+    const text = generateOfflineReport([form()], { now: NOW, extras: { Alpha: { lateForecast: new Date(2026, 10, 12) } } });
     expect(text).toContain('⚠️ *בקצב הנוכחי:* סיום צפוי ב-12/11/2026');
   });
 });
@@ -99,6 +105,6 @@ describe('field helpers', () => {
   });
 
   it('toReportItem stores numbers', () => {
-    expect(toReportItem(form())).toMatchObject({ projectName: 'Alpha', progress: 75, bugs: 3, status: 'ok' });
+    expect(toReportItem(form(), null)).toMatchObject({ projectName: 'Alpha', progress: 75, bugs: 3, status: 'ok', openBugs: null, testsPlanned: null });
   });
 });

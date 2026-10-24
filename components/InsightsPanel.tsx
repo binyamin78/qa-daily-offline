@@ -60,6 +60,37 @@ const ProgressChart: React.FC<{ series: ProgressPoint[]; forecast: Forecast; dea
   );
 };
 
+// Open bugs per report day: falling means the product is stabilising
+const BugsChart: React.FC<{ series: ProgressPoint[] }> = ({ series }) => {
+  const points = series.filter(p => p.openBugs !== null) as (ProgressPoint & { openBugs: number })[];
+  if (points.length < 2) {
+    return <p className="text-gray-500 font-bold text-center py-4 text-sm">הגרף יופיע אחרי שני דוחות עם מספר באגים פתוחים.</p>;
+  }
+  const W = 320, H = 130, L = 34, R = 12, T = 14, B = 22;
+  const first = points[0].day, lastDay = Math.max(points[points.length - 1].day, first + 1);
+  const max = Math.max(5, ...points.map(p => p.openBugs)) * 1.15;
+  const x = (day: number) => L + ((day - first) / (lastDay - first)) * (W - L - R);
+  const y = (v: number) => T + (1 - v / max) * (H - T - B);
+  const start = points[0].openBugs, end = points[points.length - 1].openBugs;
+  return (
+    <div className="space-y-1">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="גרף באגים פתוחים" dir="ltr">
+        <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#9ca3af" strokeOpacity="0.3" />
+        <text x={L - 6} y={y(0) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">0</text>
+        <polyline fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinejoin="round" points={points.map(p => `${x(p.day)},${y(p.openBugs)}`).join(' ')} />
+        {points.map(p => <circle key={p.day} cx={x(p.day)} cy={y(p.openBugs)} r="3.5" fill="#dc2626" stroke="#ffffff" strokeWidth="1.5" />)}
+        <text x={x(first)} y={y(start) - 8} textAnchor="start" fontSize="11" fontWeight="700" fill="#9ca3af">{start}</text>
+        <text x={x(points[points.length - 1].day)} y={y(end) - 8} textAnchor="end" fontSize="11" fontWeight="700" fill="#dc2626">{end}</text>
+        <text x={L} y={H - 6} textAnchor="start" fontSize="10" fill="#9ca3af">{formatShortDate(fromDayNumber(first))}</text>
+        <text x={W - R} y={H - 6} textAnchor="end" fontSize="10" fill="#9ca3af">{formatShortDate(fromDayNumber(points[points.length - 1].day))}</text>
+      </svg>
+      <p className={`text-sm font-black ${end < start ? 'text-green-700' : end > start ? 'text-orange-600' : 'text-gray-500'}`}>
+        {end < start ? `📉 יורד: ${start} → ${end}. המוצר מתייצב` : end > start ? `📈 עולה: ${start} → ${end}. נפתחים יותר באגים ממה שנסגרים` : `➖ יציב על ${end}`}
+      </p>
+    </div>
+  );
+};
+
 const InsightsPanel: React.FC<InsightsPanelProps> = ({ history, currentForm, language, onCopy, onShare, onClose }) => {
   const projects = useMemo(() => projectsWithData(history), [history]);
   const [project, setProject] = useState(() => (projects.includes(currentForm.projectName) ? currentForm.projectName : projects[0] ?? ''));
@@ -139,6 +170,13 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({ history, currentForm, lan
           </>
         )}
       </div>
+
+      {projects.length > 0 && (
+        <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-3">
+          <div className="border-r-4 border-red-600 pr-3"><h3 className="text-lg font-black text-gray-900">באגים פתוחים · {project}</h3></div>
+          <BugsChart series={series} />
+        </div>
+      )}
 
       <div className="bg-white p-5 rounded-[24px] border border-gray-200 shadow-sm space-y-4">
         <div className="border-r-4 border-green-600 pr-3"><h3 className="text-lg font-black text-gray-900">סיכום שבועי</h3></div>
