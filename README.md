@@ -6,6 +6,15 @@
 
 # QA Daily Offline
 
+<p align="center">
+  <a href="https://github.com/binyamin78/qa-daily-offline/actions/workflows/ci.yml"><img src="https://github.com/binyamin78/qa-daily-offline/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/binyamin78/qa-daily-offline/releases/latest"><img src="https://img.shields.io/badge/version-1.3-16a34a" alt="Version 1.3"></a>
+  <img src="https://img.shields.io/badge/Android-7.0%2B-3ddc84?logo=android&logoColor=white" alt="Android 7.0+">
+  <img src="https://img.shields.io/badge/internet%20permission-none-16a34a" alt="No internet permission">
+  <img src="https://img.shields.io/badge/tests-42-16a34a?logo=vitest&logoColor=white" alt="42 tests">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
 **A fully offline daily QA reporting app for Android.** Fill in a short form, and the app writes a clean, WhatsApp-ready status report, tracks every project day by day, and shows the team where things stand: progress, forecast, open bugs, test execution and blockers.
 
 No account, no server, no internet permission: everything stays on the device.
@@ -74,6 +83,19 @@ No account, no server, no internet permission: everything stays on the device.
 - The only extra permissions are for the optional daily reminder (notifications and exact alarms).
 
 You can verify this on any build with `aapt2 dump permissions app-release.apk`.
+
+## Download
+
+Get the latest signed APK from [Releases](https://github.com/binyamin78/qa-daily-offline/releases/latest), open it on your phone and allow installing from that source. See [CHANGELOG.md](CHANGELOG.md) for what's new in each version.
+
+## Documentation
+
+| | |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | What changed in every version |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the app is built, the data model and how the forecast, "since yesterday", blocker age and bug balance are calculated |
+| [SECURITY.md](SECURITY.md) | Privacy model, permissions and how to report a vulnerability |
+| [Roadmap](https://github.com/binyamin78/qa-daily-offline/milestones) | Planned features, tracked as issues |
 
 ## Tech stack
 
@@ -149,3 +171,11 @@ services/
 tests/                   Vitest suites
 android/                 Capacitor Android project
 ```
+
+## Contributing
+
+Bug reports and ideas are welcome: use the issue templates (bug report / feature request). Pull requests run type-checking, the test suite and a build in CI.
+
+## License
+
+[MIT](LICENSE)

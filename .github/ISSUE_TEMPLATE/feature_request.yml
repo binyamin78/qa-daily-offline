@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an idea for testers, developers or managers
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who is it for?
+      multiple: true
+      options: [Testers, Developers, Project managers]
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposed solution
+  - type: checkboxes
+    id: offline
+    attributes:
+      label: Offline
+      options:
+        - label: This idea works without internet access
