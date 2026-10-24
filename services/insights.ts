@@ -161,7 +161,7 @@ export const generateWeeklySummary = (
       `🐞 *${t.bugs}:* ${[
         t.bugsNew(p.bugs),
         t.bugsClosed(p.bugsClosed),
-        ...(p.openBugs ? [t.openBugsTrend(p.openBugs.from, p.openBugs.to)] : []),
+        ...(p.openBugs ? [p.openBugs.from === p.openBugs.to ? t.bugsOpen(p.openBugs.to) : t.openBugsTrend(p.openBugs.from, p.openBugs.to)] : []),
       ].join(' · ')}`,
       ...(p.tests ? [`🧪 *${t.tests}:* ${t.testsSummary(p.tests)}`] : []),
       `🚦 *${t.statusBreakdown}:* ${statusText}`,

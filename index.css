@@ -70,7 +70,7 @@ html.dark .bg-gray-100 { background-color: #1f2937; }
 html.dark .bg-gray-200 { background-color: #374151; }
 html.dark .bg-gray-800 { background-color: #374151; }
 html.dark .text-gray-900, html.dark .text-gray-800 { color: #f3f4f6; }
-html.dark .text-gray-600 { color: #d1d5db; }
+html.dark .text-gray-700, html.dark .text-gray-600 { color: #d1d5db; }
 html.dark .text-gray-500 { color: #9ca3af; }
 html.dark .text-gray-400 { color: #6b7280; }
 html.dark .border-gray-200, html.dark .border-gray-300, html.dark .border-x { border-color: #1f2937; }

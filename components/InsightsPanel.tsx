@@ -36,7 +36,7 @@ const ProgressChart: React.FC<{ series: ProgressPoint[]; forecast: Forecast; dea
   const fmt = (day: number) => formatShortDate(fromDayNumber(day));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="גרף התקדמות" dir="ltr">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="גרף התקדמות" dir="ltr" style={{ direction: 'ltr' }}>
       {[0, 50, 100].map(p => (
         <g key={p}>
           <line x1={L} x2={W - R} y1={y(p)} y2={y(p)} stroke="#9ca3af" strokeOpacity="0.3" strokeWidth="1" />
@@ -74,7 +74,7 @@ const BugsChart: React.FC<{ series: ProgressPoint[] }> = ({ series }) => {
   const start = points[0].openBugs, end = points[points.length - 1].openBugs;
   return (
     <div className="space-y-1">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="גרף באגים פתוחים" dir="ltr">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="גרף באגים פתוחים" dir="ltr" style={{ direction: 'ltr' }}>
         <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#9ca3af" strokeOpacity="0.3" />
         <text x={L - 6} y={y(0) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">0</text>
         <polyline fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinejoin="round" points={points.map(p => `${x(p.day)},${y(p.openBugs)}`).join(' ')} />

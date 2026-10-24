@@ -1,86 +1,106 @@
-<div dir="rtl">
+**English** | [עברית](README.he.md)
+
+<p align="center">
+  <img src="assets/logo/logo.svg" width="96" alt="QA Daily Offline logo">
+</p>
 
 # QA Daily Offline
 
-אפליקציה לאנדרואיד (ו-PWA) להפקת דוח QA יומי מסודר, שמוכן להדבקה בוואטסאפ. האפליקציה עובדת במלואה **ללא אינטרנט**: הנתונים נשמרים רק במכשיר ושום דבר לא נשלח לשרת.
+**A fully offline daily QA reporting app for Android.** Fill in a short form, and the app writes a clean, WhatsApp-ready status report, tracks every project day by day, and shows the team where things stand: progress, forecast, open bugs, test execution and blockers.
 
-## מה האפליקציה עושה
+No account, no server, no internet permission: everything stays on the device.
 
-- **פרטי פרויקט:** בחירת פרויקט מרשימה שמנוהלת בהגדרות, ומספר גרסה שמתעצב אוטומטית (`123` הופך ל-`1.2.3`).
-- **התקדמות וזמנים:** אחוז התקדמות עם בורר מהיר (עשרות ואז יחידות) וצפי סיום.
-- **מה נבדק היום:** האזורים והתהליכים שנבדקו.
-- **באגים וסיכונים:** מספר באגים חדשים ב-Jira, חוסמים ונושאים פתוחים.
-- **תצוגה מקדימה:** הדוח נוצר כטקסט שאפשר לערוך, ואז להעתיק ללוח או לשתף ישירות בוואטסאפ.
-- **שמירת טיוטה אוטומטית:** הטופס נשמר במכשיר, ואם האפליקציה נסגרת שום דבר לא הולך לאיבוד.
-- **סטטוס יומי:** 🟢 תקין / 🟡 בסיכון / 🔴 חסום בראש הדוח.
-- **תבניות מהירות:** כפתורים כמו "רגרסיה מלאה" שמוסיפים שורה ל"אזורים שנבדקו". את התבניות עורכים בהגדרות.
-- **דוח משולב:** כמה פרויקטים בהודעה אחת, עם סטטוס כללי לפי הפרויקט במצב הגרוע ביותר.
-- **זיכרון לכל פרויקט:** כשבוחרים פרויקט, הגרסה, ההתקדמות, הצפי והנושאים הפתוחים נטענים מהדוח האחרון שלו.
-- **גרף התקדמות ותחזית:** מגמת ההתקדמות לפי ההיסטוריה, ואזהרה כשבקצב הנוכחי הסיום צפוי אחרי היעד.
-- **סיכום שבועי:** דוח מסכם לשבוע הנוכחי או הקודם, מוכן לשליחה למנהלים.
-- **תזכורת יומית:** התראה מקומית בשעה ובימים שבוחרים. היא לא מופיעה אם כבר נשלח דוח באותו יום.
-- **לוח "המצב היום":** בראש המסך, כרטיס לכל פרויקט עם סטטוס, התקדמות, ימים עד היעד, תחזית, באגים פתוחים, חוסמים ותיקים, ואם נשלח היום דוח.
-- **"מה השתנה מאתמול":** שורה אוטומטית בדוח ובטופס: שינוי בהתקדמות, באגים חדשים מול הממוצע, באגים פתוחים, בדיקות, אחוז הצלחה, שינוי סטטוס, חוסמים חדשים וחוסמים שנפתרו.
-- **גיל חוסמים:** חוסם בכל שורה. ליד כל חוסם מוצג כמה ימים הוא פתוח, ומיום 3 הוא מסומן באדום.
-- **ביצוע בדיקות:** מתוכננות, עברו ונכשלו במחזור הנוכחי, והחישוב מציג כמה בוצעו ומה אחוז ההצלחה.
-- **מאזן באגים:** חדשים, נסגרו ופתוחים. מספר הפתוחים מתעדכן לבד מהדוח הקודם, ויש לו גרף משלו.
-- **מצב כהה ודוח באנגלית:** בהגדרות. ממשק האפליקציה נשאר בעברית, ורק טקסט הדוח מתורגם.
+<p align="center">
+  <img src="docs/screenshots/01-today.png" width="250" alt="Today dashboard">
+  <img src="docs/screenshots/05-report.png" width="250" alt="Generated report in English">
+  <img src="docs/screenshots/06-insights.png" width="250" alt="Progress and open bugs charts">
+</p>
 
-### דוגמה לדוח
+> The app interface is in Hebrew (RTL). Reports can be generated in **Hebrew or English**.
 
-```
-📅 *דיווח QA יומי* | 23.10.2026
------------------------
-🚀 *סטטוס:* MyProject (1.2.3)
-📊 *התקדמות:* 75%
-📅 *צפי סיום:* 30/10/26
+## Who it's for
 
-✅ *בוצע היום:*
-בדיקות רגרסיה למסך ההתחברות
+| | |
+|---|---|
+| **Testers** | A daily report in under a minute: quick templates, numbers that carry over from yesterday, one-tap WhatsApp / share / copy. |
+| **Developers** | Clear facts in every report: version, test execution, new vs. closed bugs, blockers and how long each has been open. |
+| **Project managers** | One glance at every project, what changed since yesterday, a forecast against the target date, and a weekly summary ready to forward. |
 
-🐞 *באגים חדשים (Jira):* 2
-🚫 *חוסמים:* אין
+## Features
 
-📝 *נושאים פתוחים:*
-אין
------------------------
-```
+### Know where things stand, every day
+- **Today dashboard**: one card per project with status, progress, days to the target date, pace forecast, open bugs, long-running blockers, and whether today's report was already sent.
+- **Since yesterday**: an automatic line in the form and the report, e.g. *progress +8% · 3 new bugs (avg 2.8) · open bugs 14 → 16 · +30 tests run · status 🟢 → 🟡 · resolved: Staging server down*.
+- **Blocker age**: one blocker per line; each shows how many days it has been open (*"Staging server down (day 4)"*) and turns red from day 3.
 
-## פרטיות: אין גישה לאינטרנט
+### The daily report
+- **Daily status**: 🟢 On track / 🟡 At risk / 🔴 Blocked at the top of the report, with a hint when blockers are filled in but the status is still green.
+- **Test execution**: planned / passed / failed for the current cycle → *"182/220 run (83%) · 92% passed · 14 failed"*.
+- **Bug balance**: new and closed/verified bugs; the open-bug count is carried over from the previous report automatically (with a manual override).
+- **Quick templates**: one-tap lines such as *Full regression* or *Smoke tests*, editable in settings.
+- **Multi-project report**: several projects in one message, with the overall status set by the worst one.
+- **Per-project memory**: picking a project restores its version, progress, target date, test counts, open issues and blockers.
+- **Edit before sending**: the generated text is editable; send via WhatsApp, the Android share sheet, or copy.
 
-- לאפליקציה באנדרואיד **אין הרשאת `INTERNET`**, כך שמערכת ההפעלה עצמה חוסמת כל גישה לרשת.
-- הגופנים מוטמעים בקובץ ה-CSS, וכל הקבצים ארוזים בתוך ה-APK.
-- ההגדרות, הטיוטה וההיסטוריה נשמרים רק במכשיר (`localStorage`).
-- וואטסאפ ו"שתף..." מעבירים את הטקסט לאפליקציה אחרת שבחרת. האפליקציה עצמה לא שולחת שום דבר.
+### Insights for managers
+- **Progress chart** per project, colored by daily status, with the target date and a dashed trend line.
+- **Pace forecast**: a linear trend over the last two weeks. If completion is expected after the target date, a warning appears in the form, on the dashboard and in the report itself.
+- **Open bugs chart**: falling means the product is stabilising.
+- **Weekly summary** for this week or last week: report days, progress from → to, bugs, test execution, statuses, blockers and late forecasts.
 
-תזכורות יומיות משתמשות בהרשאת התראות בלבד, בלי רשת. אפשר לוודא זאת בקובץ ה-APK עם `aapt2 dump permissions app-release.apk`.
+### Everyday comfort
+- **Report history**: every report that was sent or copied is saved and can be re-shared.
+- **Daily reminder**: a local notification at a chosen time and weekdays, skipped when today's report was already sent.
+- **Dark mode**: system, light or dark.
+- **Android back button** closes the top layer instead of leaving the app.
 
-## טכנולוגיות
+<p align="center">
+  <img src="docs/screenshots/02-status-change.png" width="200" alt="Daily status and change since yesterday">
+  <img src="docs/screenshots/03-tests.png" width="200" alt="Test execution">
+  <img src="docs/screenshots/04-bugs-blockers.png" width="200" alt="Bug balance and blocker age">
+  <img src="docs/screenshots/07-weekly.png" width="200" alt="Weekly summary">
+</p>
 
-React 19 · TypeScript · Vite · Tailwind CSS 4 · Capacitor 8 (Android)
+<p align="center">
+  <img src="docs/screenshots/08-dark.png" width="250" alt="Dark mode">
+</p>
 
-## הרצה מקומית
+## Privacy: no internet access
 
-דרוש Node.js 22 ומעלה.
+- The Android app has **no `INTERNET` permission**, so the operating system itself blocks any network access.
+- Fonts are embedded in the CSS and all files are packaged inside the APK.
+- Settings, drafts and history are stored only on the device (`localStorage`).
+- WhatsApp and *Share* hand the text to another app you choose; the app itself never sends anything.
+- The only extra permissions are for the optional daily reminder (notifications and exact alarms).
+
+You can verify this on any build with `aapt2 dump permissions app-release.apk`.
+
+## Tech stack
+
+React 19 · TypeScript · Vite · Tailwind CSS 4 · Capacitor 8 (Android) · Vitest
+
+## Running locally
+
+Requires Node.js 22+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-האפליקציה תיפתח בכתובת `http://localhost:3000`.
+The app opens at `http://localhost:3000`.
 
-## בדיקות אוטומטיות
+## Tests
 
 ```bash
 npm test
 ```
 
-הבדיקות נמצאות בתיקייה `tests/` ומכסות את יצירת הדוח (עברית, אנגלית ודוח משולב), טעינת נתונים שמורים (כולל נתונים פגומים וגרסאות קודמות), התחזית והסיכום השבועי. מריצים אותן לפני כל בנייה של גרסה.
+42 tests in `tests/` cover report generation (Hebrew, English, multi-project), loading stored data (including corrupt data and older versions), the forecast, the weekly summary, the change-since-yesterday logic, blocker age, the bug balance and the today dashboard. Run them before every release build.
 
-## בניית APK לאנדרואיד
+## Building the Android APK
 
-דרושים Android Studio ו-**JDK 21**. ה-JDK שמגיע עם Android Studio הוא Java 25, ו-Gradle 8.14 לא תומך בו.
+Requires Android Studio and **JDK 21**. The JDK bundled with Android Studio is Java 25, which Gradle 8.14 does not support.
 
 ```bash
 npm run build
@@ -89,11 +109,11 @@ cd android
 ./gradlew assembleRelease
 ```
 
-הקובץ ייווצר בנתיב `android/app/build/outputs/apk/release/app-release.apk`.
+The APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
 
-### חתימה
+### Signing
 
-בניית release נחתמת במפתח שמוגדר בקובץ `android/keystore.properties`:
+Release builds are signed with the key configured in `android/keystore.properties`:
 
 ```properties
 storeFile=../release.keystore
@@ -102,14 +122,30 @@ keyAlias=qadaily
 keyPassword=...
 ```
 
-הקבצים `release.keystore` ו-`keystore.properties` **לא נשמרים ב-git** וצריך לגבות אותם בנפרד. בלי אותו מפתח בדיוק אי אפשר להתקין עדכונים מעל גרסה קיימת.
+`release.keystore` and `keystore.properties` are **not committed** and must be backed up separately. Updates can only be installed over an existing version when they are signed with the exact same key.
 
-### לוגו ואייקונים
+### Logo and icons
 
-מקור הלוגו נמצא בקובץ `scripts/generate-icons.mjs`. אחרי שינוי בו מריצים `npm run icons`, והפקודה מייצרת את כל האייקונים, מסכי הפתיחה ואייקוני ה-PWA. קובצי SVG לעריכה נמצאים בתיקייה `assets/logo/`.
+The logo source lives in `scripts/generate-icons.mjs`. After changing it, run `npm run icons` to regenerate every launcher icon, splash screen and PWA icon. Editable SVGs are in `assets/logo/`.
 
-### עדכון גרסה
+### Releasing a new version
 
-לפני כל שחרור מעלים ב-1 את `versionCode` ומעדכנים את `versionName` בקובץ `android/app/build.gradle`.
+Increase `versionCode` by 1 and update `versionName` in `android/app/build.gradle` (and `version` in `package.json`) before each release.
 
-</div>
+## Project structure
+
+```
+App.tsx                  main screen and state
+components/              Header, TodayBoard, FormFields, InsightsPanel, HistoryPanel, SettingsModal, ProgressPicker
+services/
+  offlineReportService   report text generation
+  reportText             all report strings (Hebrew / English)
+  daily                  change since yesterday, blocker age, bug balance, test execution
+  insights               progress series, forecast, weekly summary
+  projectContext         per-project context and the today dashboard
+  storage                safe localStorage loading and migrations
+  shareService           copy, share sheet, WhatsApp
+  reminderService        daily local notifications
+tests/                   Vitest suites
+android/                 Capacitor Android project
+```
