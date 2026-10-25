@@ -176,6 +176,14 @@ android/                 Capacitor Android project
 
 Bug reports and ideas are welcome: use the issue templates (bug report / feature request). Pull requests run type-checking, the test suite and a build in CI.
 
+## Disclaimer
+
+- QA Daily Offline is an independent, personal open-source project, provided **"as is", without warranty of any kind** (see [LICENSE](LICENSE)). Use it at your own risk; the author is not liable for any loss of data, missed reports, wrong forecasts or other damage arising from its use.
+- Forecasts, health indicators and summaries are estimates calculated from the data you enter. They are not guarantees and are not a substitute for professional judgment.
+- All data stays on your device. You are responsible for backing it up and for what you choose to share from the app, including any confidential project information.
+- The app is not affiliated with, endorsed by or sponsored by Atlassian (Jira), Meta (WhatsApp) or Google (Android). Product names and trademarks belong to their respective owners and are used only to describe compatibility.
+- Screenshots use made-up demo data.
+
 ## License
 
 [MIT](LICENSE)
