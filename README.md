@@ -8,10 +8,10 @@
 
 <p align="center">
   <a href="https://github.com/binyamin78/qa-daily-offline/actions/workflows/ci.yml"><img src="https://github.com/binyamin78/qa-daily-offline/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/binyamin78/qa-daily-offline/releases/latest"><img src="https://img.shields.io/badge/version-1.3-16a34a" alt="Version 1.3"></a>
+  <a href="https://github.com/binyamin78/qa-daily-offline/releases/latest"><img src="https://img.shields.io/badge/version-1.3.1-16a34a" alt="Version 1.3.1"></a>
   <img src="https://img.shields.io/badge/Android-7.0%2B-3ddc84?logo=android&logoColor=white" alt="Android 7.0+">
   <img src="https://img.shields.io/badge/internet%20permission-none-16a34a" alt="No internet permission">
-  <img src="https://img.shields.io/badge/tests-42-16a34a?logo=vitest&logoColor=white" alt="42 tests">
+  <img src="https://img.shields.io/badge/tests-50-16a34a?logo=vitest&logoColor=white" alt="50 tests">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
 
@@ -76,13 +76,17 @@ No account, no server, no internet permission: everything stays on the device.
 
 ## Privacy: no internet access
 
-- The Android app has **no `INTERNET` permission**, so the operating system itself blocks any network access.
+- The Android app has **no `INTERNET` permission** (stripped at build time, so no library can add it), so the operating system itself blocks any network access.
+- WebView's own Google Safe Browsing lookups and metrics uploads are turned off.
+- App data is excluded from Google cloud backup; direct phone-to-phone transfer still works.
 - Fonts are embedded in the CSS and all files are packaged inside the APK.
 - Settings, drafts and history are stored only on the device (`localStorage`).
 - WhatsApp and *Share* hand the text to another app you choose; the app itself never sends anything.
 - The only extra permissions are for the optional daily reminder (notifications and exact alarms).
 
-You can verify this on any build with `aapt2 dump permissions app-release.apk`.
+You can verify this on any build with `aapt2 dump permissions app-release.apk`, and CI enforces it with `tests/manifest.test.ts`.
+
+> **Versions 1.0 and 1.1** still declare the `INTERNET` permission. The app never used it, but Android's WebView did, for a few KB of background traffic. Please update to the latest release.
 
 ## Download
 
@@ -118,7 +122,7 @@ The app opens at `http://localhost:3000`.
 npm test
 ```
 
-42 tests in `tests/` cover report generation (Hebrew, English, multi-project), loading stored data (including corrupt data and older versions), the forecast, the weekly summary, the change-since-yesterday logic, blocker age, the bug balance and the today dashboard. Run them before every release build.
+50 tests in `tests/` cover report generation (Hebrew, English, multi-project), loading stored data (including corrupt data and older versions), the forecast, the weekly summary, the change-since-yesterday logic, blocker age, the bug balance, the today dashboard, and the no-network guarantees in the Android manifest. Run them before every release build.
 
 ## Building the Android APK
 

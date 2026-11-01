@@ -2,6 +2,17 @@
 
 All notable changes to QA Daily Offline. Versions follow `versionName` in `android/app/build.gradle`.
 
+## [1.3.1] - 2026-11-01
+
+### Security
+- **Network permissions are now stripped at build time** (`tools:node="remove"` for `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`), so no library can add them back.
+- **WebView no longer contacts Google**: Safe Browsing lookups and usage-metrics uploads are turned off.
+- **App data is excluded from Google cloud backup** (Android 12+ data extraction rules and legacy backup rules). Direct phone-to-phone transfer still works on Android 12+.
+- New `tests/manifest.test.ts` fails CI if any of these protections is removed or an external resource is added to the web bundle.
+
+### Notes
+- The **v1.0 and v1.1 release APKs still declare the `INTERNET` permission**. The app code never made network requests, but Android's WebView used it for its own background traffic, which shows up as a few KB of data usage. Update to this version.
+
 ## [1.3] - 2026-10-24
 
 ### Added
@@ -24,6 +35,9 @@ All notable changes to QA Daily Offline. Versions follow `versionName` in `andro
 
 ## [1.2] - 2026-10-24
 
+### Changed
+- Removed the `INTERNET` permission: Android now blocks all network access for the app.
+
 ### Added
 - **Daily status** (on track / at risk / blocked) at the top of every report.
 - **Quick templates** for "checked areas", editable in settings.
@@ -44,8 +58,8 @@ All notable changes to QA Daily Offline. Versions follow `versionName` in `andro
 - Deadline countdown and progress bar.
 - New clipboard logo and green splash screen.
 
-### Changed
-- Removed the `INTERNET` permission: Android now blocks all network access for the app.
+### Known issue
+- The published v1.1 APK still declares the `INTERNET` permission (removed in 1.2).
 
 ### Fixed
 - Android back button closed the app instead of the open dialog.
@@ -58,8 +72,10 @@ All notable changes to QA Daily Offline. Versions follow `versionName` in `andro
 
 ## [1.0] - 2026-10-22
 
-- First signed Android release: daily QA form, WhatsApp-ready report, fully offline.
+- First signed Android release: daily QA form, WhatsApp-ready report, works fully offline.
+- Known issue: the APK declares the `INTERNET` permission (removed in 1.2).
 
+[1.3.1]: https://github.com/binyamin78/qa-daily-offline/releases/tag/v1.3.1
 [1.3]: https://github.com/binyamin78/qa-daily-offline/releases/tag/v1.3
 [1.2]: https://github.com/binyamin78/qa-daily-offline/releases/tag/v1.2
 [1.1]: https://github.com/binyamin78/qa-daily-offline/releases/tag/v1.1
